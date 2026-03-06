@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحليل الطلبات المعلقة - تقرير تفاعلي</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 30px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #ffd93d, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .header .date {
+            color: #a0a0a0;
+            font-size: 1em;
+            margin-top: 10px;
+        }
+        
+        .header .subtitle {
+            color: #ffd93d;
+            font-size: 1.2em;
+        }
+        
+        /* Stats Cards */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05));
+            border-radius: 20px;
+            padding: 25px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+        
+        .stat-card.pending::before { background: linear-gradient(90deg, #ffd93d, #f5c400); }
+        .stat-card.total::before { background: linear-gradient(90deg, #00d4ff, #0099cc); }
+        .stat-card.area::before { background: linear-gradient(90deg, #ff6b6b, #ee5a5a); }
+        .stat-card.product::before { background: linear-gradient(90deg, #4ecdc4, #44a08d); }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        
+        .stat-card .icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .number {
+            font-size: 3em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card.pending .number { color: #ffd93d; }
+        .stat-card.total .number { color: #00d4ff; }
+        .stat-card.area .number { color: #ff6b6b; }
+        .stat-card.product .number { color: #4ecdc4; }
+        
+        .stat-card .label {
+            color: #a0a0a0;
+            font-size: 1em;
+        }
+        
+        .stat-card .percent {
+            font-size: 0.9em;
+            color: #ffd93d;
+            margin-top: 5px;
+        }
+        
+        /* Charts Section */
+        .charts-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .chart-card h3 {
+            margin-bottom: 20px;
+            color: #fff;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        /* Table Section */
+        .table-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 30px;
+            overflow-x: auto;
+        }
+        
+        .table-section h2 {
+            margin-bottom: 20px;
+            color: #ffd93d;
+            font-size: 1.5em;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 15px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        th {
+            background: linear-gradient(90deg, rgba(255,217,61,0.3), rgba(255,107,107,0.2));
+            color: #ffd93d;
+            font-weight: 600;
+            font-size: 1.05em;
+        }
+        
+        tr:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        
+        .number-cell {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        
+        .highlight-cell {
+            color: #ffd93d;
+            font-weight: bold;
+        }
+        
+        .area-name {
+            text-align: right;
+            padding-right: 20px;
+            font-weight: 500;
+        }
+        
+        /* Top Area Badge */
+        .top-badge {
+            display: inline-block;
+            background: linear-gradient(90deg, #ffd93d, #f5c400);
+            color: #1a1a2e;
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 0.75em;
+            margin-right: 8px;
+            font-weight: bold;
+        }
+        
+        /* Insights Section */
+        .insights-section {
+            background: linear-gradient(145deg, rgba(255,217,61,0.1), rgba(255,107,107,0.1));
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255,217,61,0.3);
+        }
+        
+        .insights-section h2 {
+            margin-bottom: 25px;
+            color: #ffd93d;
+            font-size: 1.6em;
+        }
+        
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .insight-card {
+            background: rgba(0,0,0,0.2);
+            border-radius: 15px;
+            padding: 20px;
+            border-right: 4px solid #ffd93d;
+        }
+        
+        .insight-card h4 {
+            color: #ffd93d;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+        }
+        
+        .insight-card p {
+            color: #d0d0d0;
+            line-height: 1.7;
+            font-size: 1em;
+        }
+        
+        .highlight {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+        
+        .highlight-yellow {
+            color: #ffd93d;
+            font-weight: bold;
+        }
+        
+        /* Progress Bars */
+        .progress-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .progress-section h2 {
+            margin-bottom: 25px;
+            color: #4ecdc4;
+            font-size: 1.5em;
+        }
+        
+        .progress-item {
+            margin-bottom: 20px;
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+        
+        .progress-bar {
+            height: 30px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9em;
+            transition: width 1s ease;
+        }
+        
+        .progress-fill.area-1 { background: linear-gradient(90deg, #ff6b6b, #ee5a5a); }
+        .progress-fill.area-2 { background: linear-gradient(90deg, #ffd93d, #f5c400); }
+        .progress-fill.area-3 { background: linear-gradient(90deg, #4ecdc4, #44a08d); }
+        .progress-fill.area-4 { background: linear-gradient(90deg, #00d4ff, #0099cc); }
+        .progress-fill.area-5 { background: linear-gradient(90deg, #7b2cbf, #9d4edd); }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        @media (max-width: 768px) {
+            .charts-section {
+                grid-template-columns: 1fr;
+            }
+            .header h1 {
+                font-size: 1.8em;
+            }
+            .stat-card .number {
+                font-size: 2em;
+            }
+        }
+        
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+                color: black;
+            }
+            .stat-card, .chart-card, .table-section, .insights-section {
+                break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⏳ تحليل الطلبات المعلقة</h1>
+            <p class="subtitle">تقرير تفاعلي شامل</p>
+            <p class="date">📅 تاريخ التقرير: مارس 2026</p>
+        </div>
+        
+        <!-- Stats Cards -->
+        <div class="stats-row">
+            <div class="stat-card pending">
+                <div class="icon">⏳</div>
+                <div class="number">33</div>
+                <div class="label">طلب معلق</div>
+                <div class="percent">86.8% من الإجمالي</div>
+            </div>
+            <div class="stat-card total">
+                <div class="icon">📦</div>
+                <div class="number">38</div>
+                <div class="label">إجمالي الطلبات</div>
+            </div>
+            <div class="stat-card area">
+                <div class="icon">📍</div>
+                <div class="number">7</div>
+                <div class="label">مناطق متأثرة</div>
+            </div>
+            <div class="stat-card product">
+                <div class="icon">🏷️</div>
+                <div class="number">3</div>
+                <div class="label">أنواع منتجات</div>
+            </div>
+        </div>
+        
+        <!-- Charts Section -->
+        <div class="charts-section">
+            <div class="chart-card">
+                <h3>📍 توزيع الطلبات حسب المنطقة</h3>
+                <div class="chart-container">
+                    <canvas id="areaChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-card">
+                <h3>📦 توزيع الطلبات حسب المنتج</h3>
+                <div class="chart-container">
+                    <canvas id="productChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Progress Bars - Areas -->
+        <div class="progress-section">
+            <h2>📊 نسبة الطلبات المعلقة حسب المنطقة</h2>
+            
+            <div class="progress-item">
+                <div class="progress-header">
+                    <span>🥇 وسط وشمال الدمام</span>
+                    <span>15 طلب (45.5%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill area-1" style="width: 45.5%">45.5%</div>
+                </div>
+            </div>
+            
+            <div class="progress-item">
+                <div class="progress-header">
+                    <span>🥈 احياء الخبر</span>
+                    <span>6 طلبات (18.2%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill area-2" style="width: 18.2%"></div>
+                </div>
+            </div>
+            
+            <div class="progress-item">
+                <div class="progress-header">
+                    <span>🥉 القطيف وراس تنورة</span>
+                    <span>3 طلبات (9.1%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill area-3" style="width: 9.1%"></div>
+                </div>
+            </div>
+            
+            <div class="progress-item">
+                <div class="progress-header">
+                    <span>4️⃣ منطقة الظهران</span>
+                    <span>3 طلبات (9.1%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill area-4" style="width: 9.1%"></div>
+                </div>
+            </div>
+            
+            <div class="progress-item">
+                <div class="progress-header">
+                    <span>5️⃣ الجبيل البلد</span>
+                    <span>2 طلبات (6.1%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill area-5" style="width: 6.1%"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Detailed Table -->
+        <div class="table-section">
+            <h2>📋 جدول تفصيلي: المنتجات × المناطق</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>المنطقة</th>
+                        <th>سجاد 🟦</th>
+                        <th>بطانيات ومفارش 🟩</th>
+                        <th>كنب 🟨</th>
+                        <th>الإجمالي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="area-name"><span class="top-badge">الأعلى</span>وسط وشمال الدمام</td>
+                        <td class="number-cell highlight">11</td>
+                        <td class="number-cell">3</td>
+                        <td class="number-cell">1</td>
+                        <td class="number-cell highlight-yellow">15</td>
+                    </tr>
+                    <tr>
+                        <td class="area-name">احياء الخبر</td>
+                        <td class="number-cell">6</td>
+                        <td class="number-cell">0</td>
+                        <td class="number-cell">0</td>
+                        <td class="number-cell highlight-yellow">6</td>
+                    </tr>
+                    <tr>
+                        <td class="area-name">القطيف وراس تنورة</td>
+                        <td class="number-cell">1</td>
+                        <td class="number-cell">2</td>
+                        <td class="number-cell">0</td>
+                        <td class="number-cell highlight-yellow">3</td>
+                    </tr>
+                    <tr>
+                        <td class="area-name">منطقة الظهران</td>
+                        <td class="number-cell">3</td>
+                        <td class="number-cell">0</td>
+                        <td class="number-cell">0</td>
+                        <td class="number-cell highlight-yellow">3</td>
+                    </tr>
+                    <tr>
+                        <td class="area-name">الجبيل البلد</td>
+                        <td class="number-cell">1</td>
+                        <td class="number-cell">1</td>
+                        <td class="number-cell">0</td>
+                        <td class="number-cell highlight-yellow">2</td>
+                    </tr>
+                    <tr>
+                        <td class="area-name">الصناعية والمخططات</td>
+                        <td class="number-cell">1</td>
+                        <td class="number-cell">0</td>
+                        <td class="number-cell">0</td>
+                        <td class="number-cell highlight-yellow">1</td>
+                    </tr>
+                    <tr>
+                        <td class="area-name">الهيئة الملكية</td>
+                        <td class="number-cell">1</td>
+                        <td class="number-cell">0</td>
+                        <td class="number-cell">0</td>
+                        <td class="number-cell highlight-yellow">1</td>
+                    </tr>
+                    <tr style="background: rgba(255,217,61,0.1);">
+                        <td class="area-name" style="font-weight: bold;">الإجمالي</td>
+                        <td class="number-cell highlight">24</td>
+                        <td class="number-cell">7</td>
+                        <td class="number-cell">2</td>
+                        <td class="number-cell highlight-yellow" style="font-size: 1.4em;">33</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Product Distribution Chart -->
+        <div class="charts-section">
+            <div class="chart-card">
+                <h3>📊 مقارنة المنتجات حسب المنطقة</h3>
+                <div class="chart-container">
+                    <canvas id="areaProductChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-card">
+                <h3>🎯 نسبة كل منتج من الإجمالي</h3>
+                <div class="chart-container">
+                    <canvas id="productPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Insights Section -->
+        <div class="insights-section">
+            <h2>💡 الاستنتاجات والتوصيات</h2>
+            <div class="insights-grid">
+                <div class="insight-card">
+                    <h4>🔴 المنطقة الأكثر تأثراً</h4>
+                    <p>منطقة <span class="highlight">وسط وشمال الدمام</span> تحتوي على <span class="highlight-yellow">45.5%</span> من الطلبات المعلقة (15 من 33). يجب إعطاء أولوية قصوى لهذه المنطقة.</p>
+                </div>
+                <div class="insight-card">
+                    <h4>📦 المنتج الأكثر تعليقاً</h4>
+                    <p>منتج <span class="highlight">السجاد</span> يمثل <span class="highlight-yellow">72.7%</span> من الطلبات المعلقة (24 طلب). يحتاج لمتابعة خاصة في سلسلة التوريد.</p>
+                </div>
+                <div class="insight-card">
+                    <h4>⚡ أعلى تركيز</h4>
+                    <p><span class="highlight">11 طلب سجاد</span> معلق في وسط وشمال الدمام وحدها - هذا يمثل <span class="highlight-yellow">33%</span> من كل الطلبات المعلقة!</p>
+                </div>
+                <div class="insight-card">
+                    <h4>📋 توصية عاجلة</h4>
+                    <p>التركيز على <span class="highlight">طلبات السجاد في الدمام والخبر</span> سيحل <span class="highlight-yellow">70%+</span> من المشكلة. ابدأ بهذه المناطق أولاً.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>📊 تم إنشاء هذا التقرير تلقائياً | يمكنك مشاركته مع الفريق</p>
+        </div>
+    </div>
+    
+    <script>
+        Chart.defaults.color = '#fff';
+        Chart.defaults.borderColor = 'rgba(255,255,255,0.1)';
+        
+        // Area Doughnut Chart
+        new Chart(document.getElementById('areaChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['وسط وشمال الدمام', 'احياء الخبر', 'القطيف وراس تنورة', 'منطقة الظهران', 'الجبيل البلد', 'أخرى'],
+                datasets: [{
+                    data: [15, 6, 3, 3, 2, 4],
+                    backgroundColor: [
+                        '#ff6b6b',
+                        '#ffd93d',
+                        '#4ecdc4',
+                        '#00d4ff',
+                        '#7b2cbf',
+                        '#a0a0a0'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { padding: 15, font: { size: 12 } }
+                    }
+                }
+            }
+        });
+        
+        // Product Bar Chart
+        new Chart(document.getElementById('productChart'), {
+            type: 'bar',
+            data: {
+                labels: ['سجاد', 'بطانيات ومفارش', 'كنب'],
+                datasets: [{
+                    label: 'عدد الطلبات',
+                    data: [24, 7, 2],
+                    backgroundColor: ['#00d4ff', '#4ecdc4', '#ffd93d'],
+                    borderRadius: 10,
+                    barThickness: 60
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    },
+                    x: {
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+        
+        // Area-Product Stacked Bar Chart
+        new Chart(document.getElementById('areaProductChart'), {
+            type: 'bar',
+            data: {
+                labels: ['وسط وشمال الدمام', 'احياء الخبر', 'القطيف', 'الظهران', 'الجبيل'],
+                datasets: [
+                    {
+                        label: 'سجاد',
+                        data: [11, 6, 1, 3, 1],
+                        backgroundColor: '#00d4ff',
+                        borderRadius: 5
+                    },
+                    {
+                        label: 'بطانيات ومفارش',
+                        data: [3, 0, 2, 0, 1],
+                        backgroundColor: '#4ecdc4',
+                        borderRadius: 5
+                    },
+                    {
+                        label: 'كنب',
+                        data: [1, 0, 0, 0, 0],
+                        backgroundColor: '#ffd93d',
+                        borderRadius: 5
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        stacked: true,
+                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    },
+                    x: {
+                        stacked: true,
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+        
+        // Product Pie Chart
+        new Chart(document.getElementById('productPieChart'), {
+            type: 'pie',
+            data: {
+                labels: ['سجاد (72.7%)', 'بطانيات ومفارش (21.2%)', 'كنب (6.1%)'],
+                datasets: [{
+                    data: [24, 7, 2],
+                    backgroundColor: ['#00d4ff', '#4ecdc4', '#ffd93d'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { padding: 15, font: { size: 13 } }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
